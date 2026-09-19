@@ -1411,11 +1411,12 @@ public final class DataProcessor {
             final long timestamp) {
         final Map<String, BatteryHistEntry> entryMap = processedBatteryHistoryMap.get(timestamp);
         if (entryMap == null || entryMap.isEmpty()) {
-            Log.e(
+            Log.w(
                     TAG,
                     "abnormal entry list in the timestamp:"
-                            + ConvertUtils.utcToLocalTimeForLogging(timestamp));
-            return BATTERY_LEVEL_UNKNOWN;
+                            + ConvertUtils.utcToLocalTimeForLogging(timestamp)
+                            + ", falling back to current battery level");
+            return getCurrentLevel(context);
         }
         // The current time battery history hasn't been loaded yet, returns the current battery
         // level.
@@ -1532,7 +1533,7 @@ public final class DataProcessor {
                         endTimestamp,
                         startBatteryLevel,
                         endBatteryLevel,
-                        /* screenOnTime= */ 0L,
+                        /* screenOnTime= */ slotScreenOnTime,
                         appEntries,
                         systemEntries,
                         systemAppsPackageNames,
@@ -1632,8 +1633,10 @@ public final class DataProcessor {
             }
             if (isSystemConsumer(selectedBatteryEntry.mConsumerType)
                     && selectedBatteryEntry.mDrainType == BatteryConsumer.POWER_COMPONENT_SCREEN) {
-                // Replace Screen system component time with screen on time.
-                foregroundUsageTimeInMs = slotScreenOnTime;
+                // Replace Screen system component time with screen on time if available.
+                if (slotScreenOnTime > 0) {
+                    foregroundUsageTimeInMs = slotScreenOnTime;
+                }
             }
             // Excludes entry since we don't have enough data to calculate.
             if (foregroundUsageTimeInMs == 0

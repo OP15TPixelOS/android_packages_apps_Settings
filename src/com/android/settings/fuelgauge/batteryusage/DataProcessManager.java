@@ -18,6 +18,7 @@ package com.android.settings.fuelgauge.batteryusage;
 
 import android.app.usage.UsageEvents;
 import android.content.Context;
+import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.Log;
 
@@ -569,10 +570,15 @@ public class DataProcessManager {
                         Calendar.getInstance(),
                         lastFullChargeTime,
                         DatabaseUtils.BATTERY_LEVEL_RECORD_EVENTS);
+        final long bootTimestamp =
+                Math.max(0L, System.currentTimeMillis() - SystemClock.elapsedRealtime());
+        final long effectiveFullChargeTime =
+                lastFullChargeTime > 0 ? lastFullChargeTime : bootTimestamp;
         final long startTimestamp =
-                (batteryLevelRecordEvents.isEmpty()
-                                || (!isFromPeriodJob && !userIdsSeries.isMainUserProfileOnly()))
-                        ? lastFullChargeTime
+                (!isFromPeriodJob
+                                || batteryLevelRecordEvents.isEmpty()
+                                || !userIdsSeries.isMainUserProfileOnly())
+                        ? effectiveFullChargeTime
                         : batteryLevelRecordEvents.get(0).getTimestamp();
         final BatteryLevelData batteryLevelData =
                 getPeriodBatteryLevelData(
@@ -615,7 +621,7 @@ public class DataProcessManager {
             return null;
         }
 
-        final Map<Long, Map<String, BatteryHistEntry>> batteryHistoryMap =
+        Map<Long, Map<String, BatteryHistEntry>> batteryHistoryMap =
                 sFakeBatteryHistoryMap != null
                         ? sFakeBatteryHistoryMap
                         : DatabaseUtils.getHistoryMapSinceLatestRecordBeforeQueryTimestamp(
@@ -624,11 +630,31 @@ public class DataProcessManager {
                                 startTimestamp,
                                 lastFullChargeTime);
         if (batteryHistoryMap == null || batteryHistoryMap.isEmpty()) {
-            Log.d(TAG, "batteryHistoryMap is null in getPeriodBatteryLevelData()");
-            new DataProcessManager(context, lifecycle, userIdsSeries,
-                    onBatteryDiffDataMapLoadedListener)
-                    .start();
-            return null;
+            Log.d(TAG, "batteryHistoryMap is null or empty in getPeriodBatteryLevelData()");
+            BatteryUsageDataLoader.enqueueWork(context, lastFullChargeTime <= 0);
+            if (isFromPeriodJob) {
+                new DataProcessManager(context, lifecycle, userIdsSeries,
+                        onBatteryDiffDataMapLoadedListener)
+                        .start();
+                return null;
+            }
+            final Map<String, BatteryHistEntry> currentEntries =
+                    DataProcessor.getCurrentBatteryHistoryMapFromStatsService(context);
+            if (!currentEntries.isEmpty()) {
+                batteryHistoryMap = new ArrayMap<>();
+                final long bootTime =
+                        Math.max(0L, System.currentTimeMillis() - SystemClock.elapsedRealtime());
+                final long baselineTimestamp =
+                        (startTimestamp > 0 && startTimestamp >= bootTime)
+                                ? startTimestamp
+                                : bootTime;
+                batteryHistoryMap.put(baselineTimestamp, currentEntries);
+            } else {
+                new DataProcessManager(context, lifecycle, userIdsSeries,
+                        onBatteryDiffDataMapLoadedListener)
+                        .start();
+                return null;
+            }
         }
 
         // Process raw history map data into hourly timestamps.
