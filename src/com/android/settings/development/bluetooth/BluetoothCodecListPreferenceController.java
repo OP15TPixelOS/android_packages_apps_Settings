@@ -165,7 +165,7 @@ public class BluetoothCodecListPreferenceController extends AbstractBluetoothPre
         String selectedLabel = null;
         if (currentCodecConfig != null) {
             BluetoothCodecType currentCodecType = currentCodecConfig.getExtendedCodecType();
-            if (codecMap.containsKey(currentCodecType.getCodecId())) {
+            if (currentCodecType != null && codecMap.containsKey(currentCodecType.getCodecId())) {
                 selectedCodecId = String.valueOf(currentCodecType.getCodecId());
                 selectedLabel = currentCodecType.getCodecName();
                 Log.d(
