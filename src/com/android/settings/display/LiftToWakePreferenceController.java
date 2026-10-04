@@ -38,7 +38,9 @@ public class LiftToWakePreferenceController extends AbstractPreferenceController
     @Override
     public boolean isAvailable() {
         SensorManager sensors = (SensorManager) mContext.getSystemService(Context.SENSOR_SERVICE);
-        return sensors != null && sensors.getDefaultSensor(Sensor.TYPE_WAKE_GESTURE) != null;
+        return sensors != null
+                && (sensors.getDefaultSensor(Sensor.TYPE_WAKE_GESTURE) != null
+                || sensors.getDefaultSensor(Sensor.TYPE_TILT_DETECTOR, true) != null);
     }
 
     @Override
